@@ -1,3 +1,22 @@
+
+<div id="payloadPanel" style="position:fixed; left:12px; right:12px; top:12px; z-index:9999; pointer-events:auto;
+background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-radius:14px; padding:10px;">
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <div style="font-weight:800;">SKYLINK</div>
+    <div style="opacity:0.85; font-size:12px;">掃不到 QR？把 Host 的 payload 貼這裡 → Parse → Initialize</div>
+  </div>
+  <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+    <input id="payloadInput" placeholder='貼上：{"hostId":"9854","passcode":"1234"}'
+      style="flex:1; min-width:220px; padding:10px; border-radius:10px; border:1px solid rgba(0,255,140,0.55);
+      background:rgba(0,255,140,0.10); color:#d7ffe8; outline:none;" />
+    <button id="btnParsePayload"
+      style="padding:10px 12px; border-radius:10px; border:1px solid rgba(0,255,140,0.55);
+      background:rgba(0,255,140,0.12); color:#d7ffe8;">Parse</button>
+    <button id="btnHidePayload"
+      style="padding:10px 12px; border-radius:10px; border:1px solid rgba(0,255,140,0.55);
+      background:rgba(0,255,140,0.12); color:#d7ffe8;">Hide</button>
+  </div>
+</div>
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -462,6 +481,54 @@
 
 })();
 </script>
+
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const payloadInput = $("payloadInput");
+  const btnParse = $("btnParsePayload");
+  const btnHide = $("btnHidePayload");
+  const panel = $("payloadPanel");
+
+  function parsePayload(txt){
+    const s = String(txt||"").trim();
+    let hostId="", passcode="";
+    try{
+      const obj = JSON.parse(s);
+      hostId = String(obj.hostId ?? obj.id ?? "").trim();
+      passcode = String(obj.passcode ?? obj.pass ?? "").trim();
+    }catch(e){}
+    if(!hostId){
+      const get = (k)=>{
+        const r1 = new RegExp(k + "\\s*[:=]\\s*([A-Za-z0-9_-]+)", "i").exec(s);
+        if(r1) return r1[1];
+        const r2 = new RegExp("[?&]" + k + "=([A-Za-z0-9_-]+)", "i").exec(s);
+        if(r2) return r2[1];
+        return "";
+      };
+      hostId = get("hostId") || get("id");
+      passcode = get("passcode") || get("pass") || get("code");
+    }
+    if(!hostId){
+      const r = /\b\d{3,8}\b/.exec(s);
+      hostId = r ? r[0] : s;
+    }
+    return {hostId, passcode};
+  }
+
+  btnParse?.addEventListener("click", ()=>{
+    const {hostId, passcode} = parsePayload(payloadInput.value);
+    const hostIdEl = document.querySelector("#hostId") || document.querySelector("input[name='hostId']") || document.querySelector("input[id*='host']");
+    const passEl   = document.querySelector("#passcode") || document.querySelector("input[name='passcode']") || document.querySelector("input[id*='pass']");
+    if(hostIdEl) hostIdEl.value = hostId;
+    if(passEl && passcode) passEl.value = passcode;
+    try{ navigator.vibrate?.(80); }catch(e){}
+  });
+
+  btnHide?.addEventListener("click", ()=>{ panel.style.display="none"; });
+})();
+</script>
+
 </body>
 </html>
 ```
