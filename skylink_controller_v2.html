@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Flight Controller (Landscape)</title>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { 
+      background-color: #000; 
+      font-family: 'Courier New', monospace;
+      overscroll-behavior: none;
+    }
+    
+    /* 禁止預設手勢 */
+    #screen-game, #screen-calibration {
+      touch-action: none; 
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .neon-text { text-shadow: 0 0 5px #0ff, 0 0 10px #0ff; }
+    
+    /* 姿態儀的準心 */
+    .crosshair-h { width: 100%; height: 2px; background: cyan; position: absolute; top: 50%; transform: translateY(-50%); box-shadow: 0 0 5px cyan; }
+    .crosshair-v { height: 100%; width: 2px; background: cyan; position: absolute; left: 50%; transform: translateX(-50%); box-shadow: 0 0 5px cyan; }
+    
+    /* QR Reader */
+    #qr-reader { border: none !important; }
+    #qr-reader video { object-fit: cover; border-radius: 8px; }
+
+    /* 強制橫向覆蓋層 */
+    #orientation-guard {
+      display: none;
+    }
+    @media screen and (orientation: portrait) {
+      #orientation-guard { display: flex; }
+    }
+  </style>
+</head>
+<body class="text-cyan-200 h-screen w-screen overflow-hidden relative">
+
+  <!-- 0. 直向模式警告 (強制橫向) -->
+  <div id="orientation-guard" class="fixed inset-0 z-[999] bg-black flex flex-col items-center justify-center p-8 text-center">
+    <div class="text-6xl mb-6 animate-pulse">↻</div>
+    <h2 class="text-2xl font-bold text-red-500 mb-2 uppercase tracking-widest">Rotate Device</h2>
+    <p class="text-gray-400">請將手機轉為橫向以進行飛行控制</p>
+  </div>
+
+  <!-- 1. 連線登入介面 -->
+  <div id="connect-panel" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-900 p-4 transition-all duration-300">
+    <h1 class="text-2xl font-bold mb-6 neon-text tracking-widest">FLIGHT LINK</h1>
+    
+    <div class="w-full max-w-sm space-y-4 relative z-50">
+      <div>
+        <label class="block text-xs uppercase tracking-wider mb-1 text-gray-500">Host ID</label>
+        <div class="flex gap-2">
+          <input id="host-id-input" type="text" placeholder="Scan or Enter ID" 
+            class="flex-1 bg-gray-800 border border-cyan-700 text-cyan-300 p-4 rounded text-center text-xl focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_#0ff] uppercase">
+          
+          <button id="btn-scan-qr" class="bg-cyan-900 border border-cyan-500 text-white p-4 rounded hover:bg-cyan-700 active:scale-95 transition-transform" title="Scan QR Code">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <div>
+        <label class="block text-xs uppercase tracking-wider mb-1 text-gray-500">Passcode</label>
+        <input id="passcode-input" type="text" placeholder="1234" value="1234"
+          class="w-full bg-gray-800 border border-cyan-700 text-cyan-300 p-4 rounded text-center text-xl focus:outline-none focus:border-cyan-400">
+      </div>
+      
+      <button id="btn-connect" class="w-full bg-cyan-900 hover:bg-cyan-700 text-white font-bold py-5 rounded-lg border border-cyan-500 uppercase tracking-widest text-xl shadow-lg active:scale-95 transition-transform">
+        Initialize System
+      </button>
+      
+      <p id="status" class="text-center text-sm text-yellow-500 h-5 mt-2">Ready to connect</p>
+    </div>
+  </div>
+
+  <!-- QR 掃描介面 -->
+  <div id="qr-overlay" class="hidden absolute inset-0 z-[60] bg-black bg-opacity-95 flex flex-col items-center justify-center p-4">
+    <div class="relative w-full max-w-sm bg-gray-900 p-2 rounded-lg border border-cyan-500 shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+      <h3 class="text-center text-cyan-400 mb-2 font-mono">SCAN HOST QR</h3>
+      <div id="qr-reader" class="w-full h-64 bg-black overflow-hidden rounded"></div>
+      <button id="btn-close-qr" class="mt-4 w-full py-3 bg-red-900 border border-red-500 text-red-200 rounded hover:bg-red-800">CANCEL</button>
+    </div>
+  </div>
+
+  <!-- 2. 校正介面 (Flight Mode) -->
+  <div id="screen-calibration" class="hidden absolute inset-0 z-40 bg-gray-900 flex flex-col items-center justify-center p-4">
+    <h2 class="text-xl text-white mb-2 uppercase tracking-widest">Flight Sensor Calib</h2>
+    <p id="cal-instruction" class="text-cyan-300 text-center mb-8 text-lg font-bold">Step 1: Hold Center</p>
+    
+    <!-- 2D 校正視覺 (方框) -->
+    <div class="w-64 h-64 border-2 border-gray-700 rounded mb-8 relative bg-gray-900">
+      <div class="absolute top-1/2 left-1/2 w-full h-[1px] bg-gray-700 -translate-x-1/2"></div>
+      <div class="absolute top-1/2 left-1/2 h-full w-[1px] bg-gray-700 -translate-y-1/2"></div>
+      <!-- 移動的氣泡 -->
+      <div id="cal-bubble" class="absolute w-4 h-4 bg-yellow-400 rounded-full transform -translate-x-1/2 -translate-y-1/2 shadow-[0_0_10px_#fbbf24] transition-transform duration-75" style="top: 50%; left: 50%;"></div>
+    </div>
+
+    <button id="btn-calibrate" class="px-8 py-3 bg-yellow-600 text-black font-bold rounded uppercase text-xl w-64 shadow-lg active:scale-95">
+      Set Center
+    </button>
+    <div class="mt-4 text-xs text-gray-500 font-mono" id="debug-orientation">P:0 R:0</div>
+  </div>
+
+  <!-- 3. 遊戲介面 (Flight Stick) -->
+  <div id="screen-game" class="hidden absolute inset-0 flex">
+    <div class="absolute top-0 left-0 right-0 h-12 flex justify-between items-center px-4 pointer-events-none z-10 bg-gradient-to-b from-black to-transparent">
+      <div class="text-xs font-mono text-gray-400">FLIGHT: <span class="text-green-400">ONLINE</span></div>
+      <div id="debug-val" class="text-[10px] font-mono text-gray-600">waiting...</div>
+    </div>
+
+    <!-- 左區：開炮 (FIRE) -->
+    <div id="zone-fire" class="w-1/2 h-full border-r border-gray-800 relative flex items-center justify-center">
+      <!-- 修正：UI 文字與圖示改為攻擊型 -->
+      <div class="pointer-events-none opacity-20 text-red-500 font-bold text-6xl transform -rotate-90 tracking-widest">FIRE</div>
+      <!-- 點擊時的光效 -->
+      <div id="hud-fire" class="absolute inset-0 pointer-events-none transition-opacity duration-100 opacity-0 bg-red-600 mix-blend-screen"></div>
+    </div>
+
+    <!-- 右區：油門 (THRUST) -->
+    <div id="zone-gas" class="w-1/2 h-full border-l border-gray-800 relative flex items-center justify-center">
+      <div class="pointer-events-none opacity-20 text-green-500 font-bold text-6xl transform rotate-90 tracking-widest">THRUST</div>
+      <div id="hud-gas" class="absolute inset-0 pointer-events-none transition-opacity duration-100 opacity-0 bg-green-900 mix-blend-screen"></div>
+    </div>
+
+    <!-- 中央：飛行姿態儀 (Joystick Visual) -->
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <!-- 外框 -->
+      <div class="w-64 h-64 border border-cyan-900 rounded-full relative bg-black bg-opacity-30 backdrop-blur-sm overflow-hidden">
+        <div class="crosshair-h"></div>
+        <div class="crosshair-v"></div>
+        
+        <!-- 移動的準心點 -->
+        <div id="joystick-dot" class="w-4 h-4 bg-white border-2 border-cyan-500 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 shadow-[0_0_15px_#fff]"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const els = {
+    connectPanel: document.getElementById('connect-panel'),
+    calPanel: document.getElementById('screen-calibration'),
+    gamePanel: document.getElementById('screen-game'),
+    qrOverlay: document.getElementById('qr-overlay'),
+    hostId: document.getElementById('host-id-input'),
+    passcode: document.getElementById('passcode-input'),
+    btnConnect: document.getElementById('btn-connect'),
+    btnScanQr: document.getElementById('btn-scan-qr'),
+    btnCloseQr: document.getElementById('btn-close-qr'),
+    status: document.getElementById('status'),
+    calInstruction: document.getElementById('cal-instruction'),
+    btnCalibrate: document.getElementById('btn-calibrate'),
+    calBubble: document.getElementById('cal-bubble'),
+    debugOri: document.getElementById('debug-orientation'),
+    joystickDot: document.getElementById('joystick-dot'),
+    hudGas: document.getElementById('hud-gas'),
+    hudFire: document.getElementById('hud-fire'), // 修正：抓取 Fire 的 HUD
+    debugVal: document.getElementById('debug-val')
+  };
+
+  let peer = null, conn = null;
+  let html5QrCode = null;
+
+  // 感測器原始數據
+  let rawBeta = 0;  // Beta: 左右旋轉 (Roll)
+  let rawGamma = 0; // Gamma: 前後傾斜 (Pitch)
+
+  // 校正數據
+  const CAL = { 
+    centerBeta: 0, 
+    centerGamma: 0, 
+    maxPitchDiff: 30, // 預設範圍
+    maxRollDiff: 30 
+  };
+  
+  // 狀態: 0=Center, 1=Range, 2=Done
+  let calStep = 0; 
+  
+  // 輸出給遊戲的數據 (-1.0 ~ 1.0)
+  // 修正：將 brake 改為 fire
+  let input = { pitch: 0, roll: 0, gas: false, fire: false };
+
+  function setStatus(m) { els.status.textContent = m; }
+
+  // 1. QR Code
+  els.btnScanQr.addEventListener('click', () => { els.qrOverlay.classList.remove('hidden'); startQrScanner(); });
+  els.btnCloseQr.addEventListener('click', stopQrScanner);
+
+  function startQrScanner() {
+    html5QrCode = new Html5Qrcode("qr-reader");
+    html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
+      (txt) => {
+        // 支援三種 QR 格式：
+        // 1) 純 HostID： 1234
+        // 2) JSON： {"hostId":"1234","passcode":"1234"}
+        // 3) KEY=VAL： hostId=1234&passcode=1234 或 hostId:1234|passcode:1234
+        let hostId = "";
+        let passcode = "";
+        const s = String(txt || "").trim();
+
+        // JSON
+        try {
+          const obj = JSON.parse(s);
+          hostId = String(obj.hostId ?? obj.id ?? "").trim();
+          passcode = String(obj.passcode ?? obj.pass ?? "").trim();
+        } catch(e) {}
+
+        if (!hostId) {
+          // key-value
+          const get = (k) => {
+            const r1 = new RegExp(k + "\\s*[:=]\\s*([A-Za-z0-9_-]+)", "i").exec(s);
+            if (r1) return r1[1];
+            const r2 = new RegExp("[?&]" + k + "=([A-Za-z0-9_-]+)", "i").exec(s);
+            if (r2) return r2[1];
+            return "";
+          };
+          hostId = get("hostId") || get("id");
+          passcode = get("passcode") || get("pass") || get("code");
+        }
+
+        if (!hostId) {
+          // 純數字（HostID）
+          const r = /\b\d{3,8}\b/.exec(s);
+          hostId = r ? r[0] : s;
+        }
+
+        els.hostId.value = hostId;
+        if (passcode) els.passcode.value = passcode;
+
+        stopQrScanner();
+        setStatus("QR Loaded ✅");
+        try { navigator.vibrate?.(200); } catch(e){}
+      },
+      (err) => {}
+    ).catch(e => alert("Camera err: " + e));
+  }
+  function stopQrScanner() {
+    if(html5QrCode) html5QrCode.stop().then(()=>{ html5QrCode.clear(); els.qrOverlay.classList.add('hidden'); }).catch(()=>{});
+    else els.qrOverlay.classList.add('hidden');
+  }
+
+  // 2. 連線
+  els.btnConnect.addEventListener('click', async () => {
+    const hid = els.hostId.value.trim();
+    if (!hid) return setStatus("No Host ID");
+    
+    // iOS Permission
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try { await DeviceOrientationEvent.requestPermission(); } catch (e) {}
+    }
+    try { document.documentElement.requestFullscreen(); } catch(e){}
+
+    // 嘗試鎖定橫向 (部分瀏覽器支援)
+    try { screen.orientation.lock('landscape').catch(()=>{}); } catch(e){}
+
+    els.btnConnect.disabled = true; els.btnConnect.textContent = "Connecting...";
+    peer = new Peer();
+    peer.on('open', (id) => {
+      conn = peer.connect(hid);
+      conn.on('open', () => { setStatus("Verifying..."); conn.send({ type: "auth", pass: els.passcode.value }); });
+      conn.on('data', (d) => {
+        // 🔔 Host 觸覺回饋（震動）
+        if (d?.type === "haptic") {
+          // pattern: [30, 20, 60] 或數字
+          const p = d.pattern ?? 30;
+          try { navigator.vibrate?.(p); } catch(e){}
+          return;
+        }
+
+        if (d?.type === "auth_result" && d.ok) {
+          els.connectPanel.classList.add('hidden');
+          els.calPanel.classList.remove('hidden');
+          startCalibration();
+        } else if (d?.type === "auth_result") {
+          setStatus("Passcode Wrong"); els.btnConnect.disabled = false;
+        }
+      });
+      conn.on('error', () => { setStatus("Conn Error"); els.btnConnect.disabled = false; });
+    });
+    peer.on('error', (e) => { setStatus("Err: "+e.type); els.btnConnect.disabled = false; });
+  });
+
+  // 3. 雙軸感測處理
+  window.addEventListener('deviceorientation', (e) => {
+    if (e.beta !== null) rawBeta = e.beta;
+    if (e.gamma !== null) rawGamma = e.gamma;
+    updateCalVisuals();
+  });
+
+  // 視覺回饋：在校正畫面移動黃色氣泡
+  function updateCalVisuals() {
+    if (calStep < 2) {
+      // 軸向邏輯：Pitch(Gamma), Roll(Beta)
+      els.debugOri.textContent = `P(Gam):${rawGamma.toFixed(0)} R(Bet):${rawBeta.toFixed(0)}`;
+      
+      let dBeta = rawBeta - (calStep === 0 ? 0 : CAL.centerBeta);
+      let dGamma = rawGamma - (calStep === 0 ? 0 : CAL.centerGamma);
+      
+      let y = Math.max(-100, Math.min(100, dGamma * 3));  // Gamma 控制上下 (Pitch)
+      let x = Math.max(-100, Math.min(100, dBeta * 3));   // Beta 控制左右 (Roll)
+      
+      els.calBubble.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+    }
+  }
+
+  // 校正流程 (Flight Mode: Center -> Range)
+  function startCalibration() {
+    calStep = 0;
+    els.calInstruction.textContent = "1. 平拿手機 (設定中心)";
+    els.btnCalibrate.textContent = "設定中心點";
+    els.btnCalibrate.className = "px-8 py-3 bg-cyan-600 text-white font-bold rounded shadow-lg w-64";
+  }
+
+  let tempMaxPitch = 0;
+  let tempMaxRoll = 0;
+
+  els.btnCalibrate.addEventListener('click', () => {
+    if (calStep === 0) {
+      // Step 1: 記錄中心
+      CAL.centerBeta = rawBeta;
+      CAL.centerGamma = rawGamma;
+      
+      calStep = 1;
+      els.calInstruction.textContent = "2. 大幅度轉動手機 (設定範圍)";
+      els.btnCalibrate.textContent = "完成校正";
+      els.btnCalibrate.className = "px-8 py-3 bg-green-600 text-white font-bold rounded shadow-lg w-64";
+      
+      // 初始最小值
+      tempMaxPitch = 10;
+      tempMaxRoll = 10;
+      
+    } else if (calStep === 1) {
+      // Step 2: 完成
+      CAL.maxPitchDiff = Math.max(20, tempMaxPitch);
+      CAL.maxRollDiff = Math.max(20, tempMaxRoll);
+
+      calStep = 2;
+      els.calPanel.classList.add('hidden');
+      els.gamePanel.classList.remove('hidden');
+      loop();
+    }
+  });
+
+  // 在 Step 1 -> Step 2 期間持續更新最大範圍
+  function trackMaxRange() {
+    if (calStep === 1) {
+      let dP = Math.abs(rawGamma - CAL.centerGamma); // Pitch (Gamma)
+      let dR = Math.abs(rawBeta - CAL.centerBeta);   // Roll (Beta)
+      if (dP > tempMaxPitch) tempMaxPitch = dP;
+      if (dR > tempMaxRoll) tempMaxRoll = dR;
+    }
+    requestAnimationFrame(trackMaxRange);
+  }
+  trackMaxRange();
+
+  // 觸控 (Gas / Fire)
+  function onTouch(e) {
+    if (els.gamePanel.classList.contains('hidden')) return;
+    if(e.cancelable) e.preventDefault();
+    
+    let g = false, f = false; // g=Gas, f=Fire
+    let hw = window.innerWidth / 2;
+    
+    for (let i=0; i<e.touches.length; i++) {
+      if (e.touches[i].clientX > hw) {
+        g = true; // Right = Gas
+      } else {
+        f = true; // Left = Fire (Attack)
+      }
+    }
+    input.gas = g;
+    input.fire = f; // 紀錄開火狀態
+    
+    els.hudGas.style.opacity = g ? 1 : 0;
+    els.hudFire.style.opacity = f ? 1 : 0;
+  }
+  window.addEventListener('touchstart', onTouch, {passive:false});
+  window.addEventListener('touchmove', onTouch, {passive:false});
+  window.addEventListener('touchend', onTouch, {passive:false});
+
+  /* ================================================================================
+     🛠️ 鍵盤飛行模擬器 (Flight Simulator Mode)
+     W/S 或 上/下：控制 Pitch (Gamma)
+     A/D 或 左/右：控制 Roll (Beta)
+     Space: 油門 | Shift: 開炮 (Fire)
+   ================================================================================
+  */
+  window.addEventListener('keydown', (e) => {
+    // Pitch (機頭上下) -> Gamma
+    if (e.key === 'ArrowUp' || e.key === 'w') rawGamma = -45;
+    if (e.key === 'ArrowDown' || e.key === 's') rawGamma = 45;
+    
+    // Roll (機翼左右) -> Beta
+    if (e.key === 'ArrowLeft' || e.key === 'a') rawBeta = -45;
+    if (e.key === 'ArrowRight' || e.key === 'd') rawBeta = 45;
+    
+    // 按鈕
+    if (e.key === ' ') { input.gas = true; els.hudGas.style.opacity = 1; }
+    // 修正：Shift 觸發開炮
+    if (e.key === 'Shift') { input.fire = true; els.hudFire.style.opacity = 1; }
+    
+    updateCalVisuals();
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (['ArrowUp','ArrowDown','w','s'].includes(e.key)) rawGamma = 0;
+    if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) rawBeta = 0;
+    
+    if (e.key === ' ') { input.gas = false; els.hudGas.style.opacity = 0; }
+    // 修正：放開 Shift 停止開炮
+    if (e.key === 'Shift') { input.fire = false; els.hudFire.style.opacity = 0; }
+    
+    updateCalVisuals();
+  });
+  /* ================================================================================ */
+
+  function loop() {
+    requestAnimationFrame(loop);
+    
+    // 橫向計算邏輯
+    let dP = rawGamma - CAL.centerGamma;
+    let normP = dP / CAL.maxPitchDiff;
+    
+    let dR = rawBeta - CAL.centerBeta;
+    let normR = dR / CAL.maxRollDiff;
+    
+    // Clamp
+    input.pitch = parseFloat(Math.max(-1, Math.min(1, normP)).toFixed(3));
+    input.roll  = parseFloat(Math.max(-1, Math.min(1, normR)).toFixed(3));
+
+    // UI 更新
+    let joyX = input.roll * 100; 
+    let joyY = input.pitch * 100; 
+    
+    els.joystickDot.style.transform = `translate(-50%, -50%) translate(${joyX}px, ${joyY}px)`;
+    // 修正：Debug 顯示 F (Fire)
+    els.debugVal.textContent = `P:${input.pitch} R:${input.roll} G:${input.gas?1:0} F:${input.fire?1:0}`;
+  }
+
+  // 傳輸 Loop (30FPS)
+  setInterval(() => {
+    if (calStep === 2 && conn && conn.open) {
+      // 修正：傳輸資料增加 fire 欄位
+      conn.send({
+        type: "flight_input", 
+        pitch: input.pitch,
+        roll: input.roll,
+        gas: input.gas,
+        fire: input.fire // 這裡傳送 true/false
+      });
+    }
+  }, 33);
+
+})();
+</script>
+</body>
+</html>
+```
+
+### 🔔 記得通知電腦端 (Host) 更新代碼
+
+因為我們更改了傳送的資料名稱（`brake` 變成了 `fire`），請將下面這段話複製給製作電腦遊戲的 AI 或工程師，請他更新接收邏輯：
+
+> **手機控制器更新通知：**
+> 左側按鈕功能已從「煞車 (brake)」更改為「開炮 (fire)」。
+>
+> 接收到的 JSON 資料格式現在變為：
+> ```json
+> {
+>   "type": "flight_input",
+>   "pitch": 0.5,
+>   "roll": -0.2,
+>   "gas": true,   // 右側按鈕 (油門)
+>   "fire": true   // 左側按鈕 (開炮/發射) - 原本是 brake
+> }
+>
