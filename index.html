@@ -21,7 +21,7 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
   <title>Flight Controller (Landscape)</title>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -96,6 +96,41 @@ body { padding-bottom: calc(var(--safe-bottom) + 8px); padding-top: calc(var(--s
 @media (max-width: 360px), (max-height: 420px) {
   #btn-scan-qr { width: 100% !important; height: 44px; }
 }
+
+/* ================================
+   ✅ MOBILE BROWSER URL BAR FIX
+   - 避免上方網址列/下方導覽列擠壓造成按鈕看不到
+   - 使用 dvh/svh 取代 100vh，並允許內容可捲動
+   ================================ */
+html, body { height: 100%; }
+
+body{
+  min-height: 100vh;   /* fallback */
+  min-height: 100svh;  /* small viewport height */
+  min-height: 100dvh;  /* dynamic viewport height */
+}
+
+/* 對可能的主容器 class 做保守覆蓋（有就生效） */
+#app, .app, .page, .wrap, .container, .root{
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+/* 若有硬鎖高度導致底部被吃，強制放開 */
+.center, .screen, .panel{
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+/* ROTATE overlay 不要吃掉整頁捲動（只在需要時顯示） */
+#rotateOverlay, .rotateOverlay{
+  pointer-events: auto;
+}
+
 </style>
 
 </head>
