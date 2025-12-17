@@ -84,6 +84,7 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
       <div id="dbgVer" style="font-size:12px; opacity:0.9;">VER: ...</div>
       <div id="dbgHaptic" style="font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid rgba(0,255,140,0.55); background:rgba(0,255,140,0.12);">HAPTIC: ...</div>
       <div id="dbgVibrateApi" style="font-size:12px; opacity:0.9;">vibrate(): ...</div>
+      <div id="dbgVibRet" style="font-size:12px; opacity:0.9;">vibRet: ...</div>
       <div id="dbgPeer" style="font-size:12px; opacity:0.9;">peer: ...</div>
       <div id="dbgConn" style="font-size:12px; opacity:0.9;">conn: ...</div>
     </div>
@@ -308,12 +309,13 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   // ================================
   // DEBUG WIRING
   // ================================
-  const DBG_VERSION = "DEBUG-2025-12-17-01";
+  const DBG_VERSION = "DEBUG-2025-12-17-02";
   const dbg = {
     root: document.getElementById("dbg"),
     ver: document.getElementById("dbgVer"),
     haptic: document.getElementById("dbgHaptic"),
     vibApi: document.getElementById("dbgVibrateApi"),
+    vibRet: document.getElementById("dbgVibRet"),
     peer: document.getElementById("dbgPeer"),
     conn: document.getElementById("dbgConn"),
     last: document.getElementById("dbgLast"),
@@ -325,10 +327,12 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   };
 
   function dbgSet(id, text){ if(id) id.textContent = text; }
+  let lastVibReturn = "(none)";
   function dbgRefreshBasic(){
     dbgSet(dbg.ver, "VER: " + DBG_VERSION);
     const hasVibrate = !!(window.navigator && typeof window.navigator.vibrate === "function");
     dbgSet(dbg.vibApi, "vibrate(): " + (hasVibrate ? "YES" : "NO"));
+    dbgSet(dbg.vibRet, "vibRet: " + lastVibReturn);
     dbgSet(dbg.haptic, "HAPTIC: " + (vibUnlocked ? "UNLOCKED" : "LOCKED"));
   }
   dbgRefreshBasic();
@@ -344,7 +348,19 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   const _safeVibrate = safeVibrate;
   safeVibrate = function(pattern){
     dbgSet(dbg.lastH, JSON.stringify(pattern));
+    // 先走原本的保護流程
     const ok = _safeVibrate(pattern);
+    // 取得 vibrate() 的回傳值（有些裝置會回 false）
+    try {
+      if (window.navigator && typeof window.navigator.vibrate === "function") {
+        const p = (typeof pattern === "number" || Array.isArray(pattern)) ? pattern : 30;
+        lastVibReturn = String(window.navigator.vibrate(p));
+      } else {
+        lastVibReturn = "NO_API";
+      }
+    } catch(e) {
+      lastVibReturn = "ERR";
+    }
     dbgRefreshBasic();
     return ok;
   };
@@ -353,7 +369,9 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   dbg.btnTest?.addEventListener("click", () => {
     // 使用者手勢：先確保解鎖，再測
     try { unlockVibration(); } catch(e) {}
-    safeVibrate([30, 40, 30]);
+    safeVibrate([100, 60, 100, 60, 200]);
+    // 部分手機需要較長 pattern 才有感
+    setTimeout(()=>{ try{ safeVibrate(300); }catch(e){} }, 80);
   });
 
   dbg.btnUnlock?.addEventListener("click", () => {
