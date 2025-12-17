@@ -58,8 +58,56 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
       #orientation-guard { display: flex; }
     }
   </style>
+
+<style>
+/* DBG RESPONSIVE */
+#dbg button{ font-size:12px; padding:7px 9px; }
+#dbg{ font-size:12px; }
+#dbg .row{ gap:6px; }
+@media (max-width: 420px){
+  #dbg{ max-height: 30vh; padding:6px; left:6px; right:6px; bottom:6px; }
+  #dbg button{ font-size:11px; padding:6px 8px; }
+  #dbgNote{ display:none; } /* 小螢幕預設收起說明 */
+}
+</style>
+
 </head>
 <body class="text-cyan-200 h-screen w-screen overflow-hidden relative">
+
+  <!-- ============================= -->
+  <!-- DEBUG OVERLAY (Controller)    -->
+  <!-- 用於確認是否載到新版本/震動是否解鎖/是否收到 Host 訊息 -->
+  <!-- ============================= -->
+  <div id="dbg" style="position:fixed; left:8px; right:8px; bottom:8px; z-index:999999;background:rgba(0,20,0,0.90); border:2px solid #00ff88; color:#d7ffe8;border-radius:14px; padding:8px;font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;pointer-events:auto; box-shadow:0 0 18px rgba(0,255,140,0.25);max-height:34vh; overflow:auto;">
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <div style="font-weight:900; font-size:14px;">SKYLINK CONTROLLER — DEBUG</div>
+      <div id="dbgVer" style="font-size:12px; opacity:0.9;">VER: ...</div>
+      <div id="dbgHaptic" style="font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid rgba(0,255,140,0.55); background:rgba(0,255,140,0.12);">HAPTIC: ...</div>
+      <div id="dbgVibrateApi" style="font-size:12px; opacity:0.9;">vibrate(): ...</div>
+      <div id="dbgPeer" style="font-size:12px; opacity:0.9;">peer: ...</div>
+      <div id="dbgConn" style="font-size:12px; opacity:0.9;">conn: ...</div>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center;">
+      <button id="dbgBtnTest" style="padding:8px 10px; border-radius:10px; border:1px solid rgba(0,255,140,0.55); background:rgba(0,255,140,0.12); color:#d7ffe8;">Test Vibrate</button>
+      <button id="dbgBtnUnlock" style="padding:8px 10px; border-radius:10px; border:1px solid rgba(0,255,140,0.55); background:rgba(0,255,140,0.12); color:#d7ffe8;">Unlock Haptic (tap)</button>
+      <button id="dbgBtnMin" style="padding:8px 10px; border-radius:10px; border:1px solid rgba(0,255,140,0.55); background:rgba(0,255,140,0.12); color:#d7ffe8;">Min</button>
+      <button id="dbgBtnHide" style="padding:8px 10px; border-radius:10px; border:1px solid rgba(0,255,140,0.55); background:rgba(0,255,140,0.12); color:#d7ffe8;">Hide</button>
+
+      <div style="flex:1; min-width:200px; font-size:12px; opacity:0.9;">
+        last msg: <span id="dbgLast" style="font-weight:700;">(none)</span>
+        · last haptic: <span id="dbgLastH" style="font-weight:700;">(none)</span>
+      </div>
+    </div>
+
+    <div id="dbgNote" style="margin-top:8px; font-size:12px; opacity:0.85; line-height:1.4;">
+      ✅ 看到這塊面板＝你一定載到 Debug 版（不怕 GitHub 快取）。<br/>
+      若 Test Vibrate 沒震：可能是瀏覽器/裝置不支援（iPhone Safari 幾乎不支援 vibrate）。Android Chrome 最穩。<br/>
+      若有震，但 last msg 一直是 (none)：代表還沒收到 Host 的 data（連線/peer/hostId/passcode 先檢查）。 
+    </div>
+  </div>
+
+
 
   <!-- 0. 直向模式警告 (強制橫向) -->
   <div id="orientation-guard" class="fixed inset-0 z-[999] bg-black flex flex-col items-center justify-center p-8 text-center">
@@ -256,6 +304,90 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
 
   // 一次性的 pointerdown 解鎖（點 Initialize / Set Center / 遊戲觸控都會觸發）
   window.addEventListener("pointerdown", unlockVibration, { once: true, passive: true });
+
+  // ================================
+  // DEBUG WIRING
+  // ================================
+  const DBG_VERSION = "DEBUG-2025-12-17-01";
+  const dbg = {
+    root: document.getElementById("dbg"),
+    ver: document.getElementById("dbgVer"),
+    haptic: document.getElementById("dbgHaptic"),
+    vibApi: document.getElementById("dbgVibrateApi"),
+    peer: document.getElementById("dbgPeer"),
+    conn: document.getElementById("dbgConn"),
+    last: document.getElementById("dbgLast"),
+    lastH: document.getElementById("dbgLastH"),
+    btnTest: document.getElementById("dbgBtnTest"),
+    btnUnlock: document.getElementById("dbgBtnUnlock"),
+    btnMin: document.getElementById("dbgBtnMin"),
+    btnHide: document.getElementById("dbgBtnHide"),
+  };
+
+  function dbgSet(id, text){ if(id) id.textContent = text; }
+  function dbgRefreshBasic(){
+    dbgSet(dbg.ver, "VER: " + DBG_VERSION);
+    const hasVibrate = !!(window.navigator && typeof window.navigator.vibrate === "function");
+    dbgSet(dbg.vibApi, "vibrate(): " + (hasVibrate ? "YES" : "NO"));
+    dbgSet(dbg.haptic, "HAPTIC: " + (vibUnlocked ? "UNLOCKED" : "LOCKED"));
+  }
+  dbgRefreshBasic();
+
+  // 強化 unlock：每次解鎖/補震都刷新 UI
+  const _unlockVibration = unlockVibration;
+  unlockVibration = function(){
+    try { _unlockVibration(); } catch(e){}
+    dbgRefreshBasic();
+  };
+
+  // 強化 safeVibrate：記錄最近一次 pattern
+  const _safeVibrate = safeVibrate;
+  safeVibrate = function(pattern){
+    dbgSet(dbg.lastH, JSON.stringify(pattern));
+    const ok = _safeVibrate(pattern);
+    dbgRefreshBasic();
+    return ok;
+  };
+
+  // UI buttons
+  dbg.btnTest?.addEventListener("click", () => {
+    // 使用者手勢：先確保解鎖，再測
+    try { unlockVibration(); } catch(e) {}
+    safeVibrate([30, 40, 30]);
+  });
+
+  dbg.btnUnlock?.addEventListener("click", () => {
+    try { unlockVibration(); } catch(e) {}
+    dbgRefreshBasic();
+  });
+
+  dbg.btnMin?.addEventListener("click", () => {
+    if (!dbg.root) return;
+    const isMin = dbg.root.classList.toggle("min");
+    // 最小化時只留第一行資訊 + 按鈕列
+    const note = document.getElementById("dbgNote");
+    if (note) note.style.display = isMin ? "none" : "";
+    // 把面板高度縮小
+    dbg.root.style.maxHeight = isMin ? "14vh" : "34vh";
+  });
+
+dbg.btnHide?.addEventListener("click", () => {
+    if (dbg.root) dbg.root.style.display = "none";
+  });
+
+  // 在後面建立 peer/conn 後，我們會用 interval 讀取狀態（不改原邏輯）
+  setInterval(() => {
+    // peer / conn 變數在你的原程式中存在（同 scope）
+    try {
+      dbgSet(dbg.peer, "peer: " + (peer ? (peer.id || "OK") : "null"));
+    } catch(e) { dbgSet(dbg.peer, "peer: (n/a)"); }
+    try {
+      dbgSet(dbg.conn, "conn: " + (conn ? (conn.open ? "OPEN" : "CLOSED") : "null"));
+    } catch(e) { dbgSet(dbg.conn, "conn: (n/a)"); }
+    dbgRefreshBasic();
+  }, 500);
+
+
 
 
   function setStatus(m) { els.status.textContent = m; }
