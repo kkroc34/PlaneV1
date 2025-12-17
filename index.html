@@ -71,6 +71,33 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
 }
 </style>
 
+
+<style>
+<style>
+/* FORM RESPONSIVE (Controller main UI)
+   目標：Host ID / Passcode / QR 按鈕在各種手機尺寸都不會被切掉，且觸控目標足夠大
+*/
+html, body { height: 100%; }
+* { box-sizing: border-box; }
+:root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* 避免底部被系統列吃 */
+body { padding-bottom: calc(var(--safe-bottom) + 8px); padding-top: calc(var(--safe-top) + 0px); }
+
+/* 觸控目標：按鈕至少 44px */
+#btn-connect, #btn-calibrate, #btn-scan-qr { min-height: 44px; }
+
+/* 小高度（橫向常見）：縮標題與間距 */
+@media (max-height: 520px) {
+  h1.neon-text { margin-bottom: 12px !important; font-size: 20px !important; }
+}
+
+/* 超窄 / 橫向高度很小：QR 按鈕改成整行（不擠壓輸入框） */
+@media (max-width: 360px), (max-height: 420px) {
+  #btn-scan-qr { width: 100% !important; height: 44px; }
+}
+</style>
+
 </head>
 <body class="text-cyan-200 h-screen w-screen overflow-hidden relative">
 
@@ -124,7 +151,7 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
     <div class="w-full max-w-sm space-y-4 relative z-50">
       <div>
         <label class="block text-xs uppercase tracking-wider mb-1 text-gray-500">Host ID</label>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-wrap">
           <input id="host-id-input" type="text" placeholder="Scan or Enter ID" 
             class="flex-1 bg-gray-800 border border-cyan-700 text-cyan-300 p-4 rounded text-center text-xl focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_#0ff] uppercase">
           
