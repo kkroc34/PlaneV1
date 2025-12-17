@@ -208,6 +208,56 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   // 修正：將 brake 改為 fire
   let input = { pitch: 0, roll: 0, gas: false, fire: false };
 
+  // ================================
+  // 🔔 HAPTIC / VIBRATION (mobile-only)
+  // 只修震動（不動其他玩法/連線/畫面）
+  //
+  // 多數瀏覽器會限制震動必須在「使用者互動之後」才允許。
+  // 我們用 vibUnlocked 來記錄是否已互動；若尚未解鎖，
+  // 先把震動指令存起來，等下一次互動時再補震。
+  // ================================
+  let vibUnlocked = false;
+  let pendingVibrate = null;
+
+  function normalizePattern(p){
+    if (p == null) return 30;
+    if (typeof p === "number") return p;
+    if (Array.isArray(p)) return p;
+    return 30;
+  }
+
+  function safeVibrate(pattern){
+    const p = normalizePattern(pattern);
+    pendingVibrate = p;
+
+    if (!(window.navigator && typeof window.navigator.vibrate === "function")) return false;
+    if (!vibUnlocked) return false;
+
+    try {
+      window.navigator.vibrate(p);
+      pendingVibrate = null;
+      return true;
+    } catch(e) {
+      return false;
+    }
+  }
+
+  function unlockVibration(){
+    vibUnlocked = true;
+    if (!(window.navigator && typeof window.navigator.vibrate === "function")) return;
+
+    if (pendingVibrate != null) {
+      try { window.navigator.vibrate(pendingVibrate); } catch(e){}
+      pendingVibrate = null;
+    } else {
+      try { window.navigator.vibrate(1); } catch(e){}
+    }
+  }
+
+  // 一次性的 pointerdown 解鎖（點 Initialize / Set Center / 遊戲觸控都會觸發）
+  window.addEventListener("pointerdown", unlockVibration, { once: true, passive: true });
+
+
   function setStatus(m) { els.status.textContent = m; }
 
   // 1. QR Code
@@ -257,7 +307,7 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
 
         stopQrScanner();
         setStatus("QR Loaded ✅");
-        try { navigator.vibrate?.(200); } catch(e){}
+        safeVibrate(200)
       },
       (err) => {}
     ).catch(e => alert("Camera err: " + e));
@@ -269,6 +319,8 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
 
   // 2. 連線
   els.btnConnect.addEventListener('click', async () => {
+    // ✅ 使用者已點擊：在手勢上下文中解鎖震動
+    try { unlockVibration(); } catch(e) {}
     const hid = els.hostId.value.trim();
     if (!hid) return setStatus("No Host ID");
     
@@ -291,7 +343,7 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
         if (d?.type === "haptic") {
           // pattern: [30, 20, 60] 或數字
           const p = d.pattern ?? 30;
-          try { navigator.vibrate?.(p); } catch(e){}
+          safeVibrate(p)
           return;
         }
 
@@ -343,6 +395,8 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   let tempMaxRoll = 0;
 
   els.btnCalibrate.addEventListener('click', () => {
+    // ✅ 使用者已點擊：再次確保震動可用
+    try { unlockVibration(); } catch(e) {}
     if (calStep === 0) {
       // Step 1: 記錄中心
       CAL.centerBeta = rawBeta;
@@ -522,7 +576,7 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
     const passEl   = document.querySelector("#passcode") || document.querySelector("input[name='passcode']") || document.querySelector("input[id*='pass']");
     if(hostIdEl) hostIdEl.value = hostId;
     if(passEl && passcode) passEl.value = passcode;
-    try{ navigator.vibrate?.(80); }catch(e){}
+    safeVibrate(80)
   });
 
   btnHide?.addEventListener("click", ()=>{ panel.style.display="none"; });
