@@ -23,7 +23,35 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
   <title>Flight Controller (Landscape)</title>
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js">
+  // ================================
+  // Manual Disconnect
+  // ================================
+  const btnDisconnect = document.getElementById('btn-disconnect');
+  if (btnDisconnect) {
+    btnDisconnect.addEventListener('click', () => {
+      try {
+        if (conn && conn.open) {
+          conn.close();
+        }
+      } catch(e){}
+      conn = null;
+
+      // Reset local state
+      input.pitch = 0;
+      input.roll = 0;
+      input.gas = false;
+      input.fire = false;
+
+      // UI reset
+      els.gamePanel.classList.add('hidden');
+      els.calPanel.classList.remove('hidden');
+      els.status.textContent = "Disconnected";
+      els.btnConnect.disabled = false;
+    });
+  }
+
+</script>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -354,8 +382,8 @@ body{
       : (window.orientation || 0);
     const o = (orient||0) * Math.PI/180;
 
-    // euler.set( beta, alpha, -gamma, 'YXZ' )
-    const q = quatFromEulerYXZ(b, a, -g);
+    // euler.set( gamma, alpha, -beta, 'YXZ' )  // swapped beta<->gamma to match desired visual axes
+    const q = quatFromEulerYXZ(g, a, -b);
 
     // q1 = quaternion from axis-angle (1,0,0,-pi/2)
     const q1 = quatFromAxisAngle(1,0,0, -Math.PI/2);
