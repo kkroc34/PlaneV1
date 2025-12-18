@@ -24,32 +24,33 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
   <title>Flight Controller (Landscape)</title>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js">
-  // ================================
-  // Manual Disconnect
-  // ================================
-  const btnDisconnect = document.getElementById('btn-disconnect');
-  if (btnDisconnect) {
-    btnDisconnect.addEventListener('click', () => {
-      try {
-        if (conn && conn.open) {
-          conn.close();
-        }
-      } catch(e){}
-      conn = null;
+// ===== Manual Disconnect (FIXED) =====
+(function(){
+  const btn = document.getElementById("btnDisconnect");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    try {
+      if (typeof conn !== "undefined" && conn && conn.open) conn.close();
+    } catch(e){}
+    try { conn = null; } catch(e){}
 
-      // Reset local state
+    if (typeof input !== "undefined") {
       input.pitch = 0;
       input.roll = 0;
       input.gas = false;
       input.fire = false;
+    }
 
-      // UI reset
-      els.gamePanel.classList.add('hidden');
-      els.calPanel.classList.remove('hidden');
-      els.status.textContent = "Disconnected";
-      els.btnConnect.disabled = false;
-    });
-  }
+    try {
+      if (els && els.gamePanel && els.calPanel) {
+        els.gamePanel.classList.add("hidden");
+        els.calPanel.classList.remove("hidden");
+      }
+      if (els && els.status) els.status.textContent = "Disconnected";
+      if (els && els.btnConnect) els.btnConnect.disabled = false;
+    } catch(e){}
+  });
+})();
 
 </script>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -898,6 +899,22 @@ dbg.btnHide?.addEventListener("click", () => {
   btnHide?.addEventListener("click", ()=>{ panel.style.display="none"; });
 })();
 </script>
+
+
+<button id="btnDisconnect"
+  style="
+    position:fixed;
+    right:16px;
+    bottom:16px;
+    padding:12px 16px;
+    border-radius:12px;
+    background:#ff4d4d;
+    color:white;
+    font-weight:bold;
+    z-index:99999;
+  ">
+  DISCONNECT
+</button>
 
 </body>
 </html>
