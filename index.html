@@ -303,6 +303,7 @@ body{
   // 感測器原始數據
   let rawBeta = 0;  // Beta: 左右旋轉 (Roll)
   let rawGamma = 0; // Gamma: 前後傾斜 (Pitch)
+  let rawAlpha = 0; // Alpha: 水平旋轉 (Yaw)
 
   // 校正數據
   const CAL = { 
@@ -574,6 +575,7 @@ dbg.btnHide?.addEventListener("click", () => {
 
   // 3. 雙軸感測處理
   window.addEventListener('deviceorientation', (e) => {
+    if (e.alpha !== null) rawAlpha = e.alpha;
     if (e.beta !== null) rawBeta = e.beta;
     if (e.gamma !== null) rawGamma = e.gamma;
     updateCalVisuals();
@@ -583,7 +585,7 @@ dbg.btnHide?.addEventListener("click", () => {
   function updateCalVisuals() {
     if (calStep < 2) {
       // 軸向邏輯：Pitch(Gamma), Roll(Beta)
-      els.debugOri.textContent = `P(Gam):${rawGamma.toFixed(0)} R(Bet):${rawBeta.toFixed(0)}`;
+      els.debugOri.textContent = `Y(Alp):${rawAlpha.toFixed(0)} P(Gam):${rawGamma.toFixed(0)} R(Bet):${rawBeta.toFixed(0)}`;
       
       let dBeta = rawBeta - (calStep === 0 ? 0 : CAL.centerBeta);
       let dGamma = rawGamma - (calStep === 0 ? 0 : CAL.centerGamma);
@@ -740,7 +742,10 @@ dbg.btnHide?.addEventListener("click", () => {
         pitch: input.pitch,
         roll: input.roll,
         gas: input.gas,
-        fire: input.fire // 這裡傳送 true/false
+        fire: input.fire,
+        a: rawAlpha,
+        b: rawBeta,
+        g: rawGamma
       });
     }
   }, 33);
@@ -816,3 +821,4 @@ dbg.btnHide?.addEventListener("click", () => {
 >   "fire": true   // 左側按鈕 (開炮/發射) - 原本是 brake
 > }
 >
+
