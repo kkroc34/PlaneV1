@@ -1,5 +1,8 @@
 
-<div id="payloadPanel" style="position:fixed; left:12px; right:12px; top:12px; z-index:9999; pointer-events:auto;
+<div id="payloadPanel" style="position:fixed; left:12px; right:12px; top:12px; z-index:2147483647;
+    pointer-events:auto;
+    touch-action:manipulation;
+    pointer-events:auto;
 background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-radius:14px; padding:10px;">
   <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
     <div style="font-weight:800;">SKYLINK</div>
@@ -24,11 +27,29 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
   <title>Flight Controller (Landscape)</title>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js">
-// ===== Manual Disconnect (FIXED) =====
+
+// ===== Manual Disconnect (Hold 3s) =====
 (function(){
   const btn = document.getElementById("btnDisconnect");
+  const bar = document.getElementById("dcBar");
+  const label = document.getElementById("dcLabel");
   if (!btn) return;
-  btn.addEventListener("click", () => {
+
+  const HOLD_MS = 3000;
+  let holdStart = null;
+  let holding = false;
+  let rafId = null;
+
+  function reset(){
+    holding = false;
+    holdStart = null;
+    bar.style.width = "0%";
+    label.textContent = "HOLD 3s";
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+
+  function disconnectNow(){
     try {
       if (typeof conn !== "undefined" && conn && conn.open) conn.close();
     } catch(e){}
@@ -49,6 +70,32 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
       if (els && els.status) els.status.textContent = "Disconnected";
       if (els && els.btnConnect) els.btnConnect.disabled = false;
     } catch(e){}
+    reset();
+  }
+
+  function update(){
+    if (!holding) return;
+    const now = performance.now();
+    const t = now - holdStart;
+    const p = Math.min(1, t / HOLD_MS);
+    bar.style.width = (p * 100).toFixed(0) + "%";
+    label.textContent = "HOLD " + (3 - Math.floor(t/1000)) + "s";
+    if (p >= 1){
+      disconnectNow();
+      return;
+    }
+    rafId = requestAnimationFrame(update);
+  }
+
+  btn.addEventListener("pointerdown", (e)=>{
+    e.preventDefault();
+    holding = true;
+    holdStart = performance.now();
+    update();
+  });
+
+  ["pointerup","pointerleave","pointercancel"].forEach(ev=>{
+    btn.addEventListener(ev, reset);
   });
 })();
 
@@ -901,20 +948,35 @@ dbg.btnHide?.addEventListener("click", () => {
 </script>
 
 
+
 <button id="btnDisconnect"
   style="
     position:fixed;
     right:16px;
-    bottom:16px;
-    padding:12px 16px;
+    top:16px;
+    width:120px;
+    height:44px;
     border-radius:12px;
     background:#ff4d4d;
     color:white;
     font-weight:bold;
-    z-index:99999;
+    z-index:2147483647;
+    pointer-events:auto;
+    touch-action:manipulation;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);
+    overflow:hidden;
   ">
-  DISCONNECT
+  <div id="dcLabel" style="position:relative;z-index:2;">HOLD 3s</div>
+  <div id="dcBar" style="
+    position:absolute;
+    left:0; top:0; bottom:0;
+    width:0%;
+    background:rgba(255,255,255,0.35);
+    z-index:1;
+    transition:width 0.05s linear;
+  "></div>
 </button>
+
 
 </body>
 </html>
