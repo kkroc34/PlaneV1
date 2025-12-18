@@ -313,6 +313,59 @@ body{
     if (x < -180) x += 360;
     return x;
   }
+  // Quaternion utilities
+  function quatMul(a, b){
+    // a*b
+    return {
+      w: a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z,
+      x: a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y,
+      y: a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x,
+      z: a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w
+    };
+  }
+  function quatInv(q){
+    const n = q.w*q.w + q.x*q.x + q.y*q.y + q.z*q.z || 1;
+    return { w: q.w/n, x: -q.x/n, y: -q.y/n, z: -q.z/n };
+  }
+  function quatFromAxisAngle(ax, ay, az, angleRad){
+    const half = angleRad * 0.5;
+    const s = Math.sin(half);
+    return { w: Math.cos(half), x: ax*s, y: ay*s, z: az*s };
+  }
+  function quatFromEulerYXZ(x, y, z){
+    // Euler order 'YXZ' (like three.js DeviceOrientationControls mapping)
+    const c1 = Math.cos(y/2), c2 = Math.cos(x/2), c3 = Math.cos(z/2);
+    const s1 = Math.sin(y/2), s2 = Math.sin(x/2), s3 = Math.sin(z/2);
+    return {
+      w: c1*c2*c3 + s1*s2*s3,
+      x: c1*s2*c3 + s1*c2*s3,
+      y: s1*c2*c3 - c1*s2*s3,
+      z: c1*c2*s3 - s1*s2*c3
+    };
+  }
+
+  // Convert DeviceOrientation (alpha,beta,gamma) to quaternion (approx three.js DeviceOrientationControls)
+  function deviceOriToQuat(alphaDeg, betaDeg, gammaDeg){
+    const a = (alphaDeg||0) * Math.PI/180;  // Z
+    const b = (betaDeg||0)  * Math.PI/180;  // X'
+    const g = (gammaDeg||0) * Math.PI/180;  // Y''
+    const orient = (screen.orientation && typeof screen.orientation.angle === 'number')
+      ? screen.orientation.angle
+      : (window.orientation || 0);
+    const o = (orient||0) * Math.PI/180;
+
+    // euler.set( beta, alpha, -gamma, 'YXZ' )
+    const q = quatFromEulerYXZ(b, a, -g);
+
+    // q1 = quaternion from axis-angle (1,0,0,-pi/2)
+    const q1 = quatFromAxisAngle(1,0,0, -Math.PI/2);
+
+    // q0 = quaternion from axis-angle (0,0,1,-orient)
+    const q0 = quatFromAxisAngle(0,0,1, -o);
+
+    return quatMul(quatMul(q, q1), q0);
+  }
+
 
   // 校正數據
   const CAL = { 
@@ -323,6 +376,9 @@ body{
     maxRollDiff: 30 
   };
   
+  // 旋轉校正：以校正完成時姿態為原點
+  let qCalInv = null;
+
   // 狀態: 0=Center, 1=Range, 2=Done
   let calStep = 0; 
   
@@ -626,6 +682,7 @@ dbg.btnHide?.addEventListener("click", () => {
       CAL.centerBeta = rawBeta;
       CAL.centerGamma = rawGamma;
       CAL.centerAlpha = rawAlpha;
+      qCalInv = null;
       
       calStep = 1;
       els.calInstruction.textContent = "2. 大幅度轉動手機 (設定範圍)";
@@ -640,6 +697,10 @@ dbg.btnHide?.addEventListener("click", () => {
       // Step 2: 完成
       CAL.maxPitchDiff = Math.max(20, tempMaxPitch);
       CAL.maxRollDiff = Math.max(20, tempMaxRoll);
+
+      // 記住「完成校正」當下的姿態，之後以它為原點（方塊不旋轉）
+      const qNow = deviceOriToQuat(rawAlpha, rawBeta, rawGamma);
+      qCalInv = quatInv(qNow);
 
       calStep = 2;
       els.calPanel.classList.add('hidden');
@@ -748,17 +809,16 @@ dbg.btnHide?.addEventListener("click", () => {
   setInterval(() => {
     if (calStep === 2 && conn && conn.open) {
       // 修正：傳輸資料增加 fire 欄位
+      const qNow = deviceOriToQuat(rawAlpha, rawBeta, rawGamma);
+      const qRel = qCalInv ? quatMul(qCalInv, qNow) : qNow;
       conn.send({
-        type: "flight_input", 
+        type: "flight_input",
         pitch: input.pitch,
         roll: input.roll,
         gas: input.gas,
         fire: input.fire,
-        a: norm180(rawAlpha - CAL.centerAlpha),
-        b: (rawBeta - CAL.centerBeta),
-        g: (rawGamma - CAL.centerGamma)
-      });
-    }
+        qx: qRel.x, qy: qRel.y, qz: qRel.z, qw: qRel.w
+      });}
   }, 33);
 
 })();
