@@ -305,10 +305,20 @@ body{
   let rawGamma = 0; // Gamma: 前後傾斜 (Pitch)
   let rawAlpha = 0; // Alpha: 水平旋轉 (Yaw)
 
+
+  // 將角度正規化到 [-180, 180]
+  function norm180(d){
+    let x = d % 360;
+    if (x > 180) x -= 360;
+    if (x < -180) x += 360;
+    return x;
+  }
+
   // 校正數據
   const CAL = { 
     centerBeta: 0, 
-    centerGamma: 0, 
+    centerGamma: 0,
+    centerAlpha: 0,
     maxPitchDiff: 30, // 預設範圍
     maxRollDiff: 30 
   };
@@ -615,6 +625,7 @@ dbg.btnHide?.addEventListener("click", () => {
       // Step 1: 記錄中心
       CAL.centerBeta = rawBeta;
       CAL.centerGamma = rawGamma;
+      CAL.centerAlpha = rawAlpha;
       
       calStep = 1;
       els.calInstruction.textContent = "2. 大幅度轉動手機 (設定範圍)";
@@ -743,9 +754,9 @@ dbg.btnHide?.addEventListener("click", () => {
         roll: input.roll,
         gas: input.gas,
         fire: input.fire,
-        a: rawAlpha,
-        b: rawBeta,
-        g: rawGamma
+        a: norm180(rawAlpha - CAL.centerAlpha),
+        b: (rawBeta - CAL.centerBeta),
+        g: (rawGamma - CAL.centerGamma)
       });
     }
   }, 33);
