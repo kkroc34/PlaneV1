@@ -28,7 +28,8 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   <title>Flight Controller (Landscape)</title>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js">
 
-// ===== Manual Disconnect (Hold 3s) =====
+
+// ===== Manual Disconnect (Hold 3s, capture anywhere) =====
 (function(){
   const btn = document.getElementById("btnDisconnect");
   const bar = document.getElementById("dcBar");
@@ -40,11 +41,17 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
   let holding = false;
   let rafId = null;
 
+  function pointInBtn(ev){
+    const r = btn.getBoundingClientRect();
+    const x = ev.clientX, y = ev.clientY;
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+
   function reset(){
     holding = false;
     holdStart = null;
-    bar.style.width = "0%";
-    label.textContent = "HOLD 3s";
+    if (bar) bar.style.width = "0%";
+    if (label) label.textContent = "HOLD 3s";
     if (rafId) cancelAnimationFrame(rafId);
     rafId = null;
   }
@@ -63,12 +70,12 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
     }
 
     try {
-      if (els && els.gamePanel && els.calPanel) {
+      if (typeof els !== "undefined" && els && els.gamePanel && els.calPanel) {
         els.gamePanel.classList.add("hidden");
         els.calPanel.classList.remove("hidden");
       }
-      if (els && els.status) els.status.textContent = "Disconnected";
-      if (els && els.btnConnect) els.btnConnect.disabled = false;
+      if (typeof els !== "undefined" && els && els.status) els.status.textContent = "Disconnected";
+      if (typeof els !== "undefined" && els && els.btnConnect) els.btnConnect.disabled = false;
     } catch(e){}
     reset();
   }
@@ -78,8 +85,8 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
     const now = performance.now();
     const t = now - holdStart;
     const p = Math.min(1, t / HOLD_MS);
-    bar.style.width = (p * 100).toFixed(0) + "%";
-    label.textContent = "HOLD " + (3 - Math.floor(t/1000)) + "s";
+    if (bar) bar.style.width = (p * 100).toFixed(0) + "%";
+    if (label) label.textContent = "HOLD " + (3 - Math.floor(t/1000)) + "s";
     if (p >= 1){
       disconnectNow();
       return;
@@ -87,15 +94,23 @@ background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-ra
     rafId = requestAnimationFrame(update);
   }
 
-  btn.addEventListener("pointerdown", (e)=>{
-    e.preventDefault();
+  // Capture events at document level to bypass any overlay stealing the click.
+  document.addEventListener("pointerdown", (ev) => {
+    if (!pointInBtn(ev)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
     holding = true;
     holdStart = performance.now();
     update();
-  });
+  }, { capture: true });
 
-  ["pointerup","pointerleave","pointercancel"].forEach(ev=>{
-    btn.addEventListener(ev, reset);
+  ["pointerup","pointercancel","pointermove","pointerleave"].forEach(type=>{
+    document.addEventListener(type, (ev) => {
+      // If not holding, ignore. If holding and pointer leaves button area or releases, reset.
+      if (!holding) return;
+      if (type === "pointermove" && pointInBtn(ev)) return; // still inside
+      reset();
+    }, { capture: true });
   });
 })();
 
