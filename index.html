@@ -1,4 +1,28 @@
 
+<div class="debug-drawer collapsed" id="debugTop">
+  <div class="debug-dot" onclick="toggleDebug('debugTop')" title="SKYLINK DEBUG"></div>
+  <div class="debug-header" onclick="toggleDebug('debugTop')">SKYLINK DEBUG</div>
+  <div class="debug-body">
+<div id="payloadPanel" style="position:fixed; left:12px; right:12px; top:12px; z-index:9999; pointer-events:auto;
+background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-radius:14px; padding:10px;">
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <div style="font-weight:800;">SKYLINK</div>
+    <div style="opacity:0.85; font-size:12px;">掃不到 QR？把 Host 的 payload 貼這裡 → Parse → Initialize</div>
+  </div>
+  <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+    <input id="payloadInput" placeholder='貼上：{"hostId":"9854","passcode":"1234"}'
+      style="flex:1; min-width:220px; padding:10px; border-radius:10px; border:1px solid rgba(0,255,140,0.55);
+      background:rgba(0,255,140,0.10); color:#d7ffe8; outline:none;" />
+    <button id="btnParsePayload"
+      style="padding:10px 12px; border-radius:10px; border:1px solid rgba(0,255,140,0.55);
+      background:rgba(0,255,140,0.12); color:#d7ffe8;">Parse</button>
+    <button id="btnHidePayload"
+      style="padding:10px 12px; border-radius:10px; border:1px solid rgba(0,255,140,0.55);
+      background:rgba(0,255,140,0.12); color:#d7ffe8;">Hide</button>
+  </div>
+</div>
+  </div>
+</div>
 
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -40,41 +64,7 @@
     @media screen and (orientation: portrait) {
       #orientation-guard { display: flex; }
     }
-  
-
-    /* === Debug Drawer (collapsible) === */
-    .debug-drawer{
-      position:fixed;
-      left:12px;
-      right:12px;
-      z-index:9999999;
-      font-family: monospace;
-      pointer-events:auto;
-    }
-    #debugTop{ top:12px; }
-    #debugBottom{ bottom:12px; }
-
-    .debug-header{
-      background: rgba(0,20,0,0.92);
-      border:2px solid #00ff88;
-      color:#d7ffe8;
-      border-radius:14px;
-      padding:8px 12px;
-      font-weight:900;
-      font-size:12px;
-      cursor:pointer;
-      text-align:center;
-      box-shadow:0 0 18px rgba(0,255,140,0.25);
-      user-select:none;
-    }
-    .debug-body{
-      margin-top:8px;
-    }
-    .debug-drawer.collapsed .debug-body{
-      display:none;
-    }
-
-</style>
+  </style>
 
 <style>
 /* DBG RESPONSIVE */
@@ -148,45 +138,35 @@ body{
   pointer-events: auto;
 }
 
+
+/* === Debug Drawer (Dot Mode) === */
+.debug-drawer{position:fixed;left:10px;z-index:9999;font-family:monospace;}
+#debugTop{top:10px;}
+#debugBottom{bottom:10px;}
+.debug-dot{width:10px;height:10px;background:#00ff9c;border-radius:50%;box-shadow:0 0 8px #00ff9c;cursor:pointer;}
+.debug-header{display:none;margin-top:6px;padding:6px 10px;font-size:12px;color:#00ff9c;background:#0b3d2e;border:1px solid #00ff9c;text-align:center;cursor:pointer;}
+.debug-body{display:none;margin-top:4px;background:rgba(0,20,15,0.95);color:#00ff9c;border:1px solid #00ff9c;max-height:40vh;overflow-y:auto;padding:8px;}
+.debug-drawer:not(.collapsed) .debug-header,
+.debug-drawer:not(.collapsed) .debug-body{display:block;}
+
+/* Override original fixed overlays when inside drawer */
+#debugTop #payloadPanel{position:static!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;z-index:auto!important;margin:0!important;}
+#debugBottom #dbg{position:static!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;z-index:auto!important;max-height:none!important;overflow:visible!important;margin:0!important;}
+
 </style>
 
 </head>
 <body class="text-cyan-200 h-screen w-screen overflow-hidden relative">
 
-  <div class="debug-drawer collapsed" id="debugTop">
-    <div class="debug-header" onclick="toggleDebug('debugTop')">SKYLINK DEBUG (tap to expand)</div>
-    <div class="debug-body">
-  <div id="payloadPanel" style="pointer-events:auto;
-  background:rgba(0,20,0,0.92); border:2px solid #00ff88; color:#d7ffe8; border-radius:14px; padding:10px;">
-    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <div style="font-weight:800;">SKYLINK</div>
-      <div style="opacity:0.85; font-size:12px;">掃不到 QR？把 Host 的 payload 貼這裡 → Parse → Initialize</div>
-    </div>
-    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-      <input id="payloadInput" placeholder='貼上：{"hostId":"9854","passcode":"1234"}'
-        style="flex:1; min-width:220px; padding:10px; border-radius:10px; border:1px solid rgba(0,255,140,0.55);
-        background:rgba(0,255,140,0.10); color:#d7ffe8; outline:none;" />
-      <button id="btnParsePayload"
-        style="padding:10px 12px; border-radius:10px; border:1px solid rgba(0,255,140,0.55);
-        background:rgba(0,255,140,0.12); color:#d7ffe8;">Parse</button>
-      <button id="btnHidePayload"
-        style="padding:10px 12px; border-radius:10px; border:1px solid rgba(0,255,140,0.55);
-        background:rgba(0,255,140,0.12); color:#d7ffe8;">Hide</button>
-    </div>
-  </div>
-    </div>
-  </div>
-  
-
-
   <!-- ============================= -->
   <!-- DEBUG OVERLAY (Controller)    -->
   <!-- 用於確認是否載到新版本/震動是否解鎖/是否收到 Host 訊息 -->
   <!-- ============================= -->
-    <div class="debug-drawer collapsed" id="debugBottom">
-    <div class="debug-header" onclick="toggleDebug('debugBottom')">CONTROLLER DEBUG (tap to expand)</div>
-    <div class="debug-body">
-<div id="dbg" style="background:rgba(0,20,0,0.90); border:2px solid #00ff88; color:#d7ffe8;border-radius:14px; padding:8px;font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;pointer-events:auto; box-shadow:0 0 18px rgba(0,255,140,0.25);max-height:34vh; overflow:auto;">
+  <div class="debug-drawer collapsed" id="debugBottom">
+  <div class="debug-dot" onclick="toggleDebug('debugBottom')" title="CONTROLLER DEBUG"></div>
+  <div class="debug-header" onclick="toggleDebug('debugBottom')">CONTROLLER DEBUG</div>
+  <div class="debug-body">
+<div id="dbg" style="position:fixed; left:8px; right:8px; bottom:8px; z-index:999999;background:rgba(0,20,0,0.90); border:2px solid #00ff88; color:#d7ffe8;border-radius:14px; padding:8px;font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;pointer-events:auto; box-shadow:0 0 18px rgba(0,255,140,0.25);max-height:34vh; overflow:auto;">
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
       <div style="font-weight:900; font-size:14px;">SKYLINK CONTROLLER — DEBUG</div>
       <div id="dbgVer" style="font-size:12px; opacity:0.9;">VER: ...</div>
@@ -215,8 +195,8 @@ body{
       若有震，但 last msg 一直是 (none)：代表還沒收到 Host 的 data（連線/peer/hostId/passcode 先檢查）。 
     </div>
   </div>
-    </div>
   </div>
+</div>
 
 
 
@@ -846,11 +826,31 @@ dbg.btnHide?.addEventListener("click", () => {
 
 
 <script>
-  function toggleDebug(id){
-    const el = document.getElementById(id);
-    if(!el) return;
-    el.classList.toggle('collapsed');
-  }
+function toggleDebug(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.classList.toggle('collapsed');
+}
 </script>
+
 </body>
 </html>
+```
+
+### 🔔 記得通知電腦端 (Host) 更新代碼
+
+因為我們更改了傳送的資料名稱（`brake` 變成了 `fire`），請將下面這段話複製給製作電腦遊戲的 AI 或工程師，請他更新接收邏輯：
+
+> **手機控制器更新通知：**
+> 左側按鈕功能已從「煞車 (brake)」更改為「開炮 (fire)」。
+>
+> 接收到的 JSON 資料格式現在變為：
+> ```json
+> {
+>   "type": "flight_input",
+>   "pitch": 0.5,
+>   "roll": -0.2,
+>   "gas": true,   // 右側按鈕 (油門)
+>   "fire": true   // 左側按鈕 (開炮/發射) - 原本是 brake
+> }
+>
